@@ -4,6 +4,7 @@ pragma solidity 0.8.6;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/interfaces/IERC3156.sol";
 import "./lib/Governable.sol";
 
 contract Wrapper is ERC20("Flash Beluga Wrapper", "fBELUGA"), Governable {
@@ -17,6 +18,8 @@ contract Wrapper is ERC20("Flash Beluga Wrapper", "fBELUGA"), Governable {
 
     /// @dev Buffer for flashloans.
     uint256 public flashBuffer;
+
+    bytes32 internal constant _RETURN_VALUE = keccak256("ERC3156FlashBorrower.onFlashLoan");
 
     modifier onlyEOA {
         require(msg.sender == tx.origin, "Wrapper: Caller is not an EOA");
@@ -46,6 +49,31 @@ contract Wrapper is ERC20("Flash Beluga Wrapper", "fBELUGA"), Governable {
         IERC20(underlying).safeTransfer(msg.sender, sharesToTokens);
     }
 
+    /// @dev Flash borrows BELUGA in the wrapper.
+    /// @param _receiver The receiver of the flashloan.
+    /// @param _token Token to borrow, should be BELUGA.
+    /// @param _amount Amount of tokens to borrow.
+    /// @param _data A datafield that is passed to the receiver.
+    /// @return If the flashloan was successful.
+    function flashLoan(
+        IERC3156FlashBorrower _receiver,
+        address _token,
+        uint256 _amount,
+        bytes calldata _data
+    ) external returns (bool) {
+        require(_amount <= maxFlashLoan(underlying));
+        uint256 fee = flashFee(_token, _amount);
+        IERC20(underlying).safeTransfer(address(_receiver), _amount);
+        require(
+            _receiver.onFlashLoan(msg.sender, _token, _amount, fee, _data) == _RETURN_VALUE,
+            "Wrapper: Invalid return value"
+        );
+        uint256 currentAllowance = IERC20(underlying).allowance(address(_receiver), address(this));
+        require(currentAllowance >= _amount + fee, "Wrapper: Insufficient allowance");
+        IERC20(underlying).safeTransferFrom(address(_receiver), address(this), _amount + fee);
+        return true;
+    }
+
     /// @dev Fetches the total amount of tokens in the wrapper.
     /// @return The amount of BELUGA in the wrapper.
     function totalTokensInWrapper() public view returns (uint256) {
@@ -55,7 +83,7 @@ contract Wrapper is ERC20("Flash Beluga Wrapper", "fBELUGA"), Governable {
     /// @dev Fetches the max amount of tokens that can be borrowed.
     /// @param _token The token to fetch the max of.
     /// @return The maximum amount of tokens.
-    function maxFlashloan(address _token) public view returns (uint256) {
+    function maxFlashLoan(address _token) public view returns (uint256) {
         return _token == underlying ? (totalTokensInWrapper() * flashBuffer) / 10000 : 0;
     }
 
