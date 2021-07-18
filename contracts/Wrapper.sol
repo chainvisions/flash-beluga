@@ -38,13 +38,15 @@ contract Wrapper is ERC20("Flash Beluga Wrapper", "fBELUGA"), IERC3156FlashLende
 
     /// @dev Wraps BELUGA tokens in the wrapper.
     /// @param _amount Amount of BELUGA to wrap.
-    function wrap(uint256 _amount) external onlyEOA {
-        require(_amount > 0, "Wrapper: Cannot wrap 0");
-        uint256 toMint = totalSupply() == 0
-            ? _amount
-            : (_amount * totalSupply()) / totalTokensInWrapper();
-        _mint(msg.sender, toMint);
-        IERC20(underlying).safeTransferFrom(msg.sender, address(this), _amount);
+    function wrap(uint256 _amount) external {
+        _wrap(msg.sender, msg.sender, _amount);
+    }
+
+    /// @dev Wraps BELUGA tokens for another account.
+    /// @param _for Receiver of the wrapper deposit.
+    /// @param _amount Amount to deposit into the wrapper.
+    function wrapFor(address _for, uint256 _amount) external {
+        _wrap(msg.sender, _for, _amount);
     }
 
     /// @dev Unwraps BELUGA from the wrapper.
@@ -128,5 +130,14 @@ contract Wrapper is ERC20("Flash Beluga Wrapper", "fBELUGA"), IERC3156FlashLende
         require(_token == underlying, "Wrapper: The wrapper only supports BELUGA");
         uint256 fee = (_amount * flashloanFee) / 10000;
         return fee;
+    }
+    
+    function _wrap(address _from, address _to, uint256 _amount) internal onlyEOA {
+        require(_amount > 0, "Wrapper: Cannot wrap 0");
+        uint256 toMint = totalSupply() == 0
+            ? _amount
+            : (_amount * totalSupply()) / totalTokensInWrapper();
+        _mint(_to, toMint);
+        IERC20(underlying).safeTransferFrom(_from, address(this), _amount);
     }
 }
