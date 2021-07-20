@@ -105,14 +105,18 @@ contract Wrapper is ERC20("Flash Beluga Wrapper", "fBELUGA"), IERC3156FlashLende
     /// @dev Fetches the share price of fBELUGA.
     /// @return The price of 1 fBELUGA in BELUGA.
     function getPricePerFullShare() public view returns (uint256) {
-        return (totalTokensInWrapper() / totalSupply());
+        return totalSupply() == 0
+            ? 1e18
+            : (1e18 * totalTokensInWrapper()) / totalSupply();
     }
 
     /// @dev Fetches how much BELUGA a holder's fBELUGA is worth.
     /// @param _holder The holder to fetch the value of.
     /// @return Value of the holder's fBELUGA.
     function totalValueOfHolder(address _holder) public view returns (uint256) {
-        return (balanceOf(_holder) * getPricePerFullShare());
+        return totalSupply() == 0
+            ? 0
+            : (totalTokensInWrapper() * balanceOf(_holder)) / totalSupply();
     }
 
     /// @dev Fetches the max amount of tokens that can be borrowed.
